@@ -20,5 +20,5 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Danh thuc app
         env:
-          STREAMLIT_APP_URL: https://THAY-TEN-APP.streamlit.app/
+          STREAMLIT_APP_URL: https://hiepkydaisu.streamlit.app/
         run: python keep_awake.py
