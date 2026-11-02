@@ -3,7 +3,7 @@ neu thay nut 'Yes, get this app back up' thi bam, roi cho app tai xong."""
 import os, sys, time
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
-URL = os.environ.get("STREAMLIT_APP_URL", "https://THAY-TEN-APP.streamlit.app/")
+URL = os.environ.get("STREAMLIT_APP_URL", "https://hiepkydaisu.streamlit.app/")
 WAKE_TEXT = "get this app back up"
 
 def main():
