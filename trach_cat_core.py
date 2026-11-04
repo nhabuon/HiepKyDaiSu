@@ -113,6 +113,13 @@ def bat_tu(year, month, day, hour=None, minute=0, ty_muon_sang_ngay_moi=False):
     }
 
 
+def chi_tuoi(user):
+    """Ban menh rut gon CHI con tru nam (tuoi). Dung cho phan gui AI va khoa cache loi binh:
+    khong mang thang/ngay/gio sinh, nen loi binh dung chung duoc cho moi khach cung tuoi."""
+    return {"han": {"nam": user["han"]["nam"], "ngay": None}, "vi": {"nam": user["vi"]["nam"]},
+            "khong_vong": "", "con_giap": user["con_giap"]}
+
+
 # ------------------------------------------------------------------------------
 # PHAN TICH MOT NGAY
 # ------------------------------------------------------------------------------
@@ -193,24 +200,26 @@ def phan_tich_ngay(date, user, task_keys):
 
     # --- 5. Tang ca nhan ---
     if user:
-        yz, dg, dz = user["han"]["nam"][1], user["han"]["ngay"][0], user["han"]["ngay"][1]
+        yz = user["han"]["nam"][1]
+        nt = user["han"].get("ngay")  # None = chi biet tuoi (xem chi_tuoi): bo qua cac xet theo Nhat tru
+        dg, dz = (nt[0], nt[1]) if nt else (None, None)
         gan, zhi = day_gz[0], day_gz[1]
         if luc_xung(zhi, yz):
             loai.append("Xung tuổi %s (ngày %s xung %s)" % (H.CHI_VI[_ci(yz)], H.CHI_VI[_ci(zhi)], H.CHI_VI[_ci(yz)]))
-        if luc_xung(zhi, dz) and dz != yz:
+        if dz and luc_xung(zhi, dz) and dz != yz:
             loai.append("Xung Nhật chi %s của bản mệnh" % H.CHI_VI[_ci(dz)])
         hop = [nm for nm, f in (("lục hợp", luc_hop), ("tam hợp", tam_hop))
-               for b in {yz, dz} if f(zhi, b)]
+               for b in {yz, dz} - {None} if f(zhi, b)]
         if hop:
             pts += 2
             tot.append("Chi ngày %s %s với bản mệnh" % (H.CHI_VI[_ci(zhi)], " và ".join(sorted(set(hop)))))
-        if can_hop(gan, dg):
+        if dg and can_hop(gan, dg):
             pts += 1
             tot.append("Can ngày %s hợp Nhật chủ %s" % (H.CAN_VI[_gi(gan)], H.CAN_VI[_gi(dg)]))
-        if that_sat(gan, dg):
+        if dg and that_sat(gan, dg):
             pts -= 2
             xau.append("Can ngày %s là Thất Sát của Nhật chủ %s" % (H.CAN_VI[_gi(gan)], H.CAN_VI[_gi(dg)]))
-        if zhi in user["khong_vong"]:
+        if zhi in user.get("khong_vong", ""):
             pts -= 1
             xau.append("Chi ngày rơi vào Không Vong của Nhật trụ")
 
