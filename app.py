@@ -1,9 +1,9 @@
 import datetime
 import html
-import re
 
 import streamlit as st
 
+import dai_su_ai as A
 import trach_cat_core as T
 
 st.set_page_config(page_title="Hiệp Kỷ Đại Sư - Chọn Ngày Tốt", page_icon="📜",
@@ -14,20 +14,9 @@ AI_PER_SESSION = 3
 
 
 # ==============================================================================
-# AI BINH GIAI (Gemini) - chi viet loi tu du kien da tinh, KHONG tu tinh
+# AI BINH GIAI (Gemini) - chi viet loi tu du kien da tinh, KHONG tu tinh.
+# Prompt, loc o mo ta, khoa cache: dai_su_ai.py
 # ==============================================================================
-def resolve_gemini_model(name):
-    n = (name or "").strip().lower()
-    if not n:
-        return "gemini-4-argon"
-    if n.startswith("gemini-"):
-        return n
-    m = re.search(r"([0-9]+(?:\.[0-9]+)*)\s*[\-_ ]?\s*(argon|pro|flash|ultra|lite)", n)
-    if m:
-        return "gemini-%s-%s" % (m.group(1), m.group(2))
-    return "gemini-4-argon"
-
-
 def _secret(key, default=None):
     try:
         return st.secrets[key]
@@ -55,37 +44,10 @@ def ai_count_one():
     st.session_state["ai_used"] = st.session_state.get("ai_used", 0) + 1
 
 
-AI_SYSTEM = """Bạn là Hiệp Kỷ Đại Sư, người bình giải lịch chọn ngày cho khách của Thương Mại và Công Nghệ MIT.
-LUẬT BẮT BUỘC:
-1. Chỉ dùng đúng các dữ kiện được cung cấp (can chi, trực, hoàng đạo, sao, thần sát, việc nên/kiêng, xung hợp). Không tự tính lại can chi, không thêm thần sát không có trong dữ kiện.
-2. Không đưa con số, phần trăm, điểm số hay xác suất.
-3. Không phán sức khỏe, bệnh tật, tuổi thọ, không phán số phận ("khắc", "cô quả", "đại nạn").
-4. Không bán hay khuyên mua vật phẩm phong thủy, bùa, đá.
-5. Giọng văn điềm đạm, rõ ràng, tiếng Việt phổ thông; thuật ngữ Hán Việt thì giải thích ngắn khi dùng lần đầu.
-NHIỆM VỤ: Bình giải vì sao các ngày tốt được chọn (đối chiếu với việc khách định làm và bản mệnh), vì sao các ngày xấu bị loại, rồi gợi ý cách chọn giữa các ngày tốt dựa trên yếu tố thực tế (lịch làm việc, chuẩn bị). Dài khoảng 250-350 chữ, chia mục ngắn."""
-
-
-def build_ai_prompt(user, task, good, bad):
-    def line(d):
-        return ("- %s (%s, âm lịch %s), ngày %s, trực %s, %s %s, sao %s. Điểm cộng: %s. Điểm trừ: %s. Lý do loại: %s"
-                % (d["date"].strftime("%d/%m/%Y"), d["thu"], d["am_lich"], d["can_chi"], d["truc"],
-                   "Hoàng đạo" if d["hoang_dao"] else "Hắc đạo", d["than"], d["sao"],
-                   "; ".join(d["tot"]) or "không", "; ".join(d["xau"]) or "không", "; ".join(d["loai"]) or "không"))
-    bt = user["vi"]
-    return ("BẢN MỆNH (đã tính sẵn): năm %s, tháng %s, ngày %s, giờ %s; Nhật chủ %s.\nVIỆC ĐỊNH LÀM: %s\n\n"
-            "NGÀY TỐT ĐÃ CHỌN:\n%s\n\nNGÀY NÊN TRÁNH:\n%s"
-            % (bt["nam"], bt["thang"], bt["ngay"], bt["gio"], bt["ngay"].split()[0], task,
-               "\n".join(line(d) for d in good) or "(không có)", "\n".join(line(d) for d in bad) or "(không có)"))
-
-
-def ask_gemini(prompt):
-    from google import genai
-    from google.genai import types
-    client = genai.Client(api_key=_secret("GEMINI_API_KEY"))
-    resp = client.models.generate_content(
-        model=resolve_gemini_model(_secret("GEMINI_MODEL", "Argon")), contents=prompt,
-        config=types.GenerateContentConfig(system_instruction=AI_SYSTEM, max_output_tokens=4000))
-    return (resp.text or "").strip()
+@st.cache_resource
+def _loi_binh_cache():
+    # Dung chung moi phien: cung (ngay, tuoi, viec, mo ta) -> cung loi binh, khong ton them luot.
+    return A.LoiBinhCache()
 
 
 # ==============================================================================
@@ -131,6 +93,12 @@ with st.form("hk"):
                          help="Các phái còn tranh cãi chỗ này. Mặc định giữ ngày cũ, chỉ đổi Can giờ.")
     st.markdown("##### 📅 BƯỚC 2: Việc định làm và khoảng ngày cần chọn")
     task = st.selectbox("Việc định làm", list(T.TASKS.keys()))
+    mo_ta_raw = ""
+    if _secret("GEMINI_API_KEY"):
+        mo_ta_raw = st.text_input(
+            "Mô tả việc cụ thể (không bắt buộc)", max_chars=A.MO_TA_MAX,
+            placeholder="VD: mở tiệm nail, mua xe ô tô, khai trương quán cà phê",
+            help="Chỉ dùng cho lời bình của Đại Sư. Không ghi số điện thoại, tên người.")
     c3, c4 = st.columns(2)
     start = c3.date_input("Từ ngày", value=today, format="DD/MM/YYYY")
     end = c4.date_input("Đến ngày", value=today + datetime.timedelta(days=30), format="DD/MM/YYYY")
@@ -141,7 +109,11 @@ if go:
         h = HOURS[hour_label]
         user = T.bat_tu(birth.year, birth.month, birth.day, h, 30 if h == 23 else 0, ty_muon_sang_ngay_moi=ty_moi)
         days = T.quet(start, end, user, task)
-        st.session_state["res"] = {"user": user, "task": task, "days": days}
+        # max_chars chi chan tren trinh duyet -> lam sach + cat lai o phia may chu
+        mo_ta = A.lam_sach_mo_ta(mo_ta_raw)
+        loai_tu_choi, tu_choi = A.kiem_mo_ta(mo_ta)
+        st.session_state["res"] = {"user": user, "task": task, "days": days,
+                                   "mo_ta": "" if loai_tu_choi else mo_ta, "tu_choi": tu_choi}
         st.session_state.pop("ai_text", None)
     except ValueError as e:
         st.warning("⚠️ " + str(e))
@@ -199,21 +171,34 @@ if res:
 
     # ---- AI binh giai ----
     st.markdown("##### 🧙 Lời bình của Đại Sư")
+    model = A.resolve_gemini_model(_secret("GEMINI_MODEL", "Argon"))
+    khoa, prompt = A.yeu_cau_ai(task, res.get("mo_ta", ""), user, top or good[:3], bad[:3], model)
+    cache = _loi_binh_cache()
+    if res.get("tu_choi"):
+        st.info("🙏 " + res["tu_choi"])
     if st.session_state.get("ai_text"):
         st.markdown(st.session_state["ai_text"])
-    elif not _secret("GEMINI_API_KEY"):
+    elif cache.peek(khoa) is None and not _secret("GEMINI_API_KEY"):
         st.caption("Phần bình giải bằng AI chưa được bật.")
-    elif ai_quota_left() <= 0:
+    elif cache.peek(khoa) is None and ai_quota_left() <= 0:
         st.caption("Đã hết lượt bình giải hôm nay. Kết quả chọn ngày ở trên vẫn đầy đủ.")
     elif st.button("🧙 Nhờ Đại Sư bình giải", width="stretch"):
+        t0 = datetime.datetime.now()
+        txt = cache.get(khoa)
+        if txt:
+            print(A.log_line("cache-hit", model, khoa, t0))  # da co loi binh: khong ton luot
+            st.session_state["ai_text"] = txt
+            st.rerun()
         with st.spinner("Đại Sư đang xem lịch..."):
             try:
-                txt = ask_gemini(build_ai_prompt(user, task, top or good[:3], bad[:3]))
+                txt = A.ask_gemini(prompt, _secret("GEMINI_API_KEY"), model)
                 ai_count_one()
+                cache.put(khoa, txt)
+                print(A.log_line("goi-moi", model, khoa, t0))
                 st.session_state["ai_text"] = txt or "Đại Sư chưa trả lời được, bác thử lại sau."
                 st.rerun()
             except Exception as e:
-                print("[HiepKy] AI loi:", e)
+                print(A.log_line("loi", model, khoa, t0), e)
                 st.warning("Đại Sư đang bận, bác thử lại sau ít phút. Kết quả chọn ngày ở trên vẫn dùng được.")
 
     st.markdown("""<div class="note">※ GHI CHÚ<br>
