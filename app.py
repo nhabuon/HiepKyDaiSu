@@ -11,6 +11,9 @@ st.set_page_config(page_title="Hiệp Kỷ Đại Sư - Chọn Ngày Tốt", pag
 
 VN_TZ = datetime.timezone(datetime.timedelta(hours=7))
 AI_PER_SESSION = 3
+PHONE = "0347653354"
+PHONE_VI = "0347 653 354"  # hien thi tach nhom cho de doc
+ZALO_LINK = f"https://zalo.me/{PHONE}"
 
 
 # ==============================================================================
@@ -71,6 +74,11 @@ st.markdown("""<style>
 .bazi {display:grid; grid-template-columns:repeat(4,1fr); gap:8px; text-align:center;}
 .bazi div {background:#18181b; border:1px solid #854d0e; border-radius:8px; padding:8px;}
 .bazi b {display:block; color:#facc15; font-size:17px;} .bazi small {color:#a1a1aa;}
+.contact {text-align:center; color:#d4d4d8; font-size:14px; margin:22px 0 8px;}
+/* nut lien he: tong vang nau nhu header (CSS .stApp p o tren lam chu trong nut trang bi mat) */
+.st-key-lien_he a {background:#18181b !important; border:1px solid #854d0e !important;}
+.st-key-lien_he a:hover {border-color:#eab308 !important;}
+.st-key-lien_he a p {color:#facc15 !important; font-weight:600;}
 .note {color:#8b8b95; font-size:12px; border-top:1px solid #27272a; padding-top:10px; margin-top:18px;}
 #MainMenu, footer, header {visibility:hidden;}
 </style>""", unsafe_allow_html=True)
@@ -181,7 +189,8 @@ if res:
     elif cache.peek(khoa) is None and not _secret("GEMINI_API_KEY"):
         st.caption("Phần bình giải bằng AI chưa được bật.")
     elif cache.peek(khoa) is None and ai_quota_left() <= 0:
-        st.caption("Đã hết lượt bình giải hôm nay. Kết quả chọn ngày ở trên vẫn đầy đủ.")
+        st.caption(f"Đã hết lượt bình giải hôm nay. Kết quả chọn ngày ở trên vẫn đầy đủ; "
+                   f"bác cần hỏi thêm thì nhắn Zalo {PHONE_VI}.")
     elif st.button("🧙 Nhờ Đại Sư bình giải", width="stretch"):
         t0 = datetime.datetime.now()
         txt = cache.get(khoa)
@@ -207,6 +216,13 @@ xung hợp với tuổi. Bảng việc nên/kiêng lấy theo dữ liệu lịch
 Âm lịch tính theo lịch Trung Hoa, đôi khi lệch một ngày so với lịch Việt Nam ở một vài tháng.
 Đây là tham khảo văn hóa, chưa có kiểm chứng khoa học; không dùng để trì hoãn việc khám chữa bệnh
 hay các quyết định cần chuyên môn.</div>""", unsafe_allow_html=True)
+
+# Lien he: luon hien (ca khi chua chon ngay), 2 nut nhu Bac Si Robot
+with st.container(key="lien_he"):
+    st.markdown("<div class='contact'>📞 Bác cần hỗ trợ thêm? Nhắn Zalo hoặc gọi:</div>", unsafe_allow_html=True)
+    c5, c6 = st.columns(2)
+    c5.link_button(f"💬 Zalo {PHONE_VI}", ZALO_LINK, width="stretch")
+    c6.link_button(f"☎️ Gọi {PHONE_VI}", f"tel:{PHONE}", width="stretch")
 
 st.markdown("<div style='text-align:center;color:#71717a;font-size:12px;margin-top:14px'>© 2026 Thương Mại và Công Nghệ MIT</div>",
             unsafe_allow_html=True)
